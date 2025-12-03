@@ -3,12 +3,13 @@ yolo_tkinter_app.py
 
 Features included:
 1) Confidence slider (adjust min detection confidence)
-5) Side panel showing detected classes + confidence scores
+5) Side panel showing confidence scores
 6) Table of bounding boxes (x1, y1, x2, y2, class, confidence)
 7) Save output to chosen folder
 8) Clear image / reset button
 9) Class colors legend
 10) Thumbnail history of processed images
+11) Camera capture with automatic detection every 2 seconds
 
 Requirements:
     pip install ultralytics pillow numpy opencv-python
