@@ -11,7 +11,7 @@ Features included:
 10) Thumbnail history of processed images
 
 Requirements:
-    pip install ultralytics pillow numpy
+    pip install ultralytics pillow numpy opencv-python
 Run:
     python yolo_tkinter_app.py
 """
@@ -23,9 +23,12 @@ from ultralytics import YOLO
 import numpy as np
 import os
 import time
+import cv2
+import threading
+import shutil
 
 # ---------- Configuration ----------
-MODEL_PATH = "runs/detect/train2/weights/best.pt"  # change to your model path
+MODEL_PATH = "./best.pt"
 CANVAS_MAX_W, CANVAS_MAX_H = 900, 700
 THUMB_SIZE = (100, 70)
 HISTORY_LIMIT = 8
@@ -57,6 +60,16 @@ class YOLOTkApp:
         self.annotated_pil = None
         self.history = []  # list of dicts {path, thumb_pil}
         self.save_folder = os.getcwd()
+        
+        # Camera state
+        self.camera_active = False
+        self.camera_thread = None
+        self.camera_capture = None
+        self.captured_images = []  # Track all captured image paths
+        
+        # Create images folder
+        self.images_folder = os.path.join(os.getcwd(), "images")
+        os.makedirs(self.images_folder, exist_ok=True)
 
         # Colors for classes
         self.class_names = self.model.names if hasattr(self.model, "names") else {}
@@ -82,12 +95,18 @@ class YOLOTkApp:
 
         self.upload_btn = tk.Button(ctrl_frame, text="Upload Image", command=self.upload_image)
         self.upload_btn.pack(side=tk.LEFT, padx=4)
+        
+        self.camera_btn = tk.Button(ctrl_frame, text="Start Camera", command=self.toggle_camera)
+        self.camera_btn.pack(side=tk.LEFT, padx=4)
 
         self.run_btn = tk.Button(ctrl_frame, text="Run Detection", command=self.run_detection, state=tk.DISABLED)
         self.run_btn.pack(side=tk.LEFT, padx=4)
 
         self.clear_btn = tk.Button(ctrl_frame, text="Clear / Reset", command=self.clear_all)
         self.clear_btn.pack(side=tk.LEFT, padx=4)
+        
+        self.stop_btn = tk.Button(ctrl_frame, text="Stop & Exit", command=self.stop_and_exit, bg="#ff4444", fg="white")
+        self.stop_btn.pack(side=tk.LEFT, padx=4)
 
         tk.Label(ctrl_frame, text="Min Confidence:").pack(side=tk.LEFT, padx=(12,4))
         self.conf_var = tk.DoubleVar(value=0.25)
@@ -122,13 +141,6 @@ class YOLOTkApp:
         # Right side panel: detection summary and table
         right_panel = tk.Frame(main_frame, width=360)
         right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=6, pady=6)
-
-        # Legend (class colors)
-        legend_label = tk.Label(right_panel, text="Class Legend", font=("Segoe UI", 10, "bold"))
-        legend_label.pack(anchor="nw")
-        self.legend_box = tk.Frame(right_panel)
-        self.legend_box.pack(anchor="nw", fill=tk.X, pady=(4,12))
-        self._populate_legend()
 
         # Detected classes + confidences (list)
         det_label = tk.Label(right_panel, text="Detected Objects", font=("Segoe UI", 10, "bold"))
@@ -370,9 +382,123 @@ class YOLOTkApp:
     def _update_status(self, text):
         self.status.config(text=text)
         self.root.update_idletasks()
+    
+    def toggle_camera(self):
+        if self.camera_active:
+            self.stop_camera()
+        else:
+            self.start_camera()
+    
+    def start_camera(self):
+        """Start camera capture with automatic detection"""
+        try:
+            self.camera_capture = cv2.VideoCapture(0)
+            if not self.camera_capture.isOpened():
+                messagebox.showerror("Camera Error", "Could not access camera. Please check if it's connected.")
+                return
+            
+            self.camera_active = True
+            self.camera_btn.config(text="Stop Camera")
+            self.upload_btn.config(state=tk.DISABLED)
+            self._update_status("Camera active - capturing every 2 seconds")
+            
+            # Start camera thread
+            self.camera_thread = threading.Thread(target=self._camera_loop, daemon=True)
+            self.camera_thread.start()
+        except Exception as e: 
+            messagebox.showerror("Camera Error", f"Failed to start camera:\n{e}")
+    
+    def stop_camera(self):
+        """Stop camera capture"""
+        self.camera_active = False
+        if self.camera_capture:
+            self.camera_capture.release()
+            self.camera_capture = None
+        self.camera_btn.config(text="Start Camera")
+        self.upload_btn.config(state=tk.NORMAL)
+        self._update_status("Camera stopped")
+    
+    def _camera_loop(self):
+        """Camera capture loop - captures every 2 seconds, runs detection after 1 second"""
+        while self.camera_active:
+            try:
+                # Capture frame
+                ret, frame = self.camera_capture.read()
+                if not ret:
+                    self.root.after(0, lambda: messagebox.showerror("Camera Error", "Failed to capture frame"))
+                    self.root.after(0, self.stop_camera)
+                    break
+                
+                # Convert BGR (OpenCV) to RGB (PIL)
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(frame_rgb)
+                
+                # Save to images folder
+                timestamp = int(time.time() * 1000)  # milliseconds for uniqueness
+                image_path = os.path.join(self.images_folder, f"capture_{timestamp}.jpg")
+                pil_image.save(image_path)
+                self.image_path = image_path
+                self.captured_images.append(image_path)
+                
+                # Update display in main thread
+                self.root.after(0, lambda img=pil_image: self._load_camera_image(img))
+                
+                # Wait 1 second, then run detection
+                time.sleep(1)
+                if self.camera_active:
+                    self.root.after(0, self._run_camera_detection)
+                
+                # Wait additional 1 second to complete 2 second cycle
+                time.sleep(1)
+                
+            except Exception as e:
+                self.root.after(0, lambda err=str(e): messagebox.showerror("Camera Error", f"Error in camera loop:\n{err}"))
+                self.root.after(0, self.stop_camera)
+                break
+    
+    def _load_camera_image(self, pil_img):
+        """Load camera image into display (called from main thread)"""
+        self.display_image_pil = pil_img
+        self.annotated_pil = None
+        self._draw_on_canvas(pil_img)
+        self._update_status(f"Camera captured - running detection...")
+    
+    def _run_camera_detection(self):
+        """Run detection on camera image (called from main thread)"""
+        if not self.camera_active:
+            return
+        try:
+            self.run_detection()
+        except Exception as e:
+            print(f"Detection error: {e}")
+    
+    def stop_and_exit(self):
+        """Stop camera, delete all captured images, and close application"""
+        # Stop camera if active
+        if self.camera_active:
+            self.stop_camera()
+        
+        # Delete images folder and all contents
+        try:
+            if os.path.exists(self.images_folder):
+                shutil.rmtree(self.images_folder)
+                print(f"Deleted images folder: {self.images_folder}")
+        except Exception as e:
+            print(f"Error deleting images folder: {e}")
+        
+        # Close application
+        self.root.destroy()
 
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = YOLOTkApp(root)
+    
+    # Clean up camera on close
+    def on_closing():
+        if app.camera_active:
+            app.stop_camera()
+        root.destroy()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
