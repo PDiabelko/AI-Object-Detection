@@ -324,13 +324,8 @@ def main():
     
     # Sidebar footer buttons
     st.sidebar.markdown("---")
-    if st.sidebar.button("🗑️ Clear All", use_container_width=True):
-        st.session_state.detection_results = None
-        st.session_state.annotated_image = None
-        st.session_state.current_image = None
-        st.rerun()
     
-    if st.sidebar.button("🛑 Stop & Exit", type="secondary", use_container_width=True):
+    if st.sidebar.button("🛑 Delete Saved Images", type="secondary", use_container_width=True):
         stop_and_exit()
 
 if __name__ == "__main__":
