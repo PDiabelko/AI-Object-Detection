@@ -206,9 +206,9 @@ def main():
             with col1:
                 st.subheader("Detection Result")
                 if st.session_state.annotated_image is not None:
-                    st.image(st.session_state.annotated_image, use_container_width=True)
+                    st.image(st.session_state.annotated_image, width='stretch')
                 else:
-                    st.image(image, use_container_width=True)
+                    st.image(image, width='stretch')
                     st.info("Click 'Run Detection' to process the image")
             
             # Display detection info
@@ -227,7 +227,7 @@ def main():
                     st.subheader("Bounding Boxes")
                     df = pd.DataFrame(st.session_state.detection_results)
                     df['conf'] = df['conf'].round(3)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width='stretch')
                     
                     # Save button
                     if st.session_state.annotated_image is not None:
@@ -246,12 +246,12 @@ def main():
         col_start, col_stop = st.sidebar.columns(2)
         
         with col_start:
-            if st.button("▶️ Start", use_container_width=True):
+            if st.button("▶️ Start", width='stretch'):
                 st.session_state.camera_active = True
                 st.rerun()
         
         with col_stop:
-            if st.button("⏹️ Stop", use_container_width=True):
+            if st.button("⏹️ Stop", width='stretch'):
                 st.session_state.camera_active = False
                 st.rerun()
         
@@ -291,7 +291,7 @@ def main():
                     
                     # Display captured image
                     with image_placeholder.container():
-                        st.image(pil_image, caption="Live Capture", use_container_width=True)
+                        st.image(pil_image, caption="Live Capture", width='stretch')
                     
                     # Wait before detection
                     time.sleep(detection_delay)
@@ -304,7 +304,7 @@ def main():
                             # Display annotated image
                             image_placeholder.empty()
                             with image_placeholder.container():
-                                st.image(annotated, caption="Detection Result", use_container_width=True)
+                                st.image(annotated, caption="Detection Result", width='stretch')
                             
                             # Display results
                             st.subheader("Detection Summary")
@@ -325,7 +325,7 @@ def main():
     # Sidebar footer buttons
     st.sidebar.markdown("---")
     
-    if st.sidebar.button("🛑 Delete Saved Images", type="secondary", use_container_width=True):
+    if st.sidebar.button("🛑 Clear Images", type="secondary", width='stretch'):
         stop_and_exit()
 
 if __name__ == "__main__":
