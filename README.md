@@ -85,7 +85,6 @@ The `Training_Model_Scripts/` directory contains scripts to help you train your 
 - **Model Files**:
   - `best.pt`: The primary trained model used by the applications.
   - `yolo11n.pt`, `yolo11s.pt`: Pre-trained YOLOv11 base models.
-  - `best-S.pt`, `best-S10.pt`: Checkpoints from various training runs.
 
 ## Models
 
